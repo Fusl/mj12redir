@@ -1,0 +1,49 @@
+#!/usr/bin/perl
+
+	require 5.6.0;use strict;use warnings;use Getopt::Std;use POSIX qw(:sys_wait_h :errno_h);
+	use Socket qw(:DEFAULT :crlf);
+	my $login = getlogin || (getpwuid($<))[0] || "Intruder!"; 
+	$0 = "mj12redirect";
+	$SIG{'CHLD'} = \&reaper;
+	$SIG{'KILL'} = \&SigHandler;
+	$SIG{'INT'}  = \&SigHandler;
+	$SIG{'TERM'} = \&SigHandler;
+	$SIG{'QUIT'} = \&SigHandler;
+	$SIG{'HUP'}  = \&SigHandler;
+	my $S;
+	socket($S,PF_INET,SOCK_STREAM,6) || die "can't create socket: $!\n";
+	setsockopt($S, SOL_SOCKET, SO_REUSEADDR, pack('i', 1)) || die "can't setsockopt: $!\n";
+	bind($S,pack('S n C4 x8', AF_INET, 80, (0,0,0,0))) || die "can't bind socket: $!\n";
+	listen($S,5) || die "can't listen to socket: $!\n";
+
+	for (;;) {
+		my $NS;
+		if (!accept($NS, $S)) {
+			if ($! == EINTR || $! == ECHILD || $! == EPROTOTYPE) {
+				next;
+			}
+			exit(1);
+		}
+		my $child;
+		if (($child = fork()) == 0) {
+			print($NS "HTTP/1.0 301 Moved Permanently\r\n");
+			print($NS "Location: http://www.majestic12.co.uk/projects/dsearch/mj12bot.php\r\n\r\n");
+			close($NS);
+			exit(0);
+		} else {
+			close($NS);
+		}
+	}
+
+	sub SigHandler {
+		my $sig = shift;
+		exit(1);
+	}
+
+	sub reaper {
+		while (1) {
+			my $pid = waitpid(-1, WNOHANG);
+			last if ($pid < 1);
+		}
+		$SIG{'CHLD'} = \&reaper;
+	}
